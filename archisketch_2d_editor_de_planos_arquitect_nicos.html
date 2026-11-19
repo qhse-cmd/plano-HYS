@@ -1,0 +1,2230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchiSketch 2D - Editor de Planos Arquitectónicos</title>
+    <!-- Tailwind CSS para interfaz moderna y responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter y JetBrains Mono para medidas técnicas -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Personalización de barras de desplazamiento */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        canvas {
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .tool-btn.active {
+            background-color: #2563eb;
+            color: #ffffff;
+            border-color: #3b82f6;
+            box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+        }
+        /* Estilo para sliders */
+        input[type=range] {
+            accent-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen w-screen flex flex-col">
+
+    <!-- BARRA SUPERIOR: Archivo, Historial, Cuadrícula y Exportación -->
+    <header class="h-14 bg-slate-950 border-b border-slate-800 px-3 flex items-center justify-between z-20 shrink-0">
+        <!-- Logo y Título del Proyecto -->
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-600/30">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <input id="projectTitleInput" type="text" value="Plano de Vivienda - Planta Baja" 
+                        class="bg-transparent border-b border-transparent hover:border-slate-700 focus:border-blue-500 focus:outline-none text-sm font-semibold text-white px-1 py-0.5 w-48 sm:w-64 transition">
+                </div>
+                <span class="text-[11px] text-slate-400 hidden sm:inline">ArchiSketch CAD 2D • Unidades en Metros (m)</span>
+            </div>
+        </div>
+
+        <!-- Controles Centrales: Deshacer / Rehacer / Grilla / Zoom -->
+        <div class="hidden md:flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <button id="btnUndo" title="Deshacer (Ctrl+Z)" class="p-1.5 rounded hover:bg-slate-800 text-slate-300 disabled:opacity-30 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+            </button>
+            <button id="btnRedo" title="Rehacer (Ctrl+Y)" class="p-1.5 rounded hover:bg-slate-800 text-slate-300 disabled:opacity-30 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"/></svg>
+            </button>
+            <div class="h-4 w-[1px] bg-slate-700 mx-1"></div>
+            <label class="flex items-center gap-1.5 text-xs text-slate-300 px-2 cursor-pointer">
+                <input id="chkSnap" type="checkbox" checked class="rounded bg-slate-800 border-slate-600 text-blue-500">
+                <span>Ajuste (Snap):</span>
+            </label>
+            <select id="snapSizeSelect" class="bg-slate-800 text-xs text-white rounded px-2 py-1 border border-slate-700 focus:outline-none">
+                <option value="0.05">0.05 m (5 cm)</option>
+                <option value="0.10" selected>0.10 m (10 cm)</option>
+                <option value="0.25">0.25 m (25 cm)</option>
+                <option value="0.50">0.50 m (50 cm)</option>
+                <option value="1.00">1.00 m (1 m)</option>
+            </select>
+            <div class="h-4 w-[1px] bg-slate-700 mx-1"></div>
+            <button id="btnResetView" title="Centrar Vista" class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 rounded text-slate-200 transition">
+                100%
+            </button>
+        </div>
+
+        <!-- Botones de Archivo y Exportación -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+            <label for="bgImageInput" title="Subir boceto a mano para calcar" class="cursor-pointer flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="hidden lg:inline">Calco / Boceto</span>
+            </label>
+            <input id="bgImageInput" type="file" accept="image/*" class="hidden">
+
+            <button id="btnSaveJson" title="Guardar proyecto editable (.json)" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                <span class="hidden sm:inline">Guardar</span>
+            </button>
+
+            <label for="loadJsonInput" title="Abrir proyecto (.json)" class="cursor-pointer flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+                <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/></svg>
+                <span class="hidden sm:inline">Abrir</span>
+            </label>
+            <input id="loadJsonInput" type="file" accept=".json" class="hidden">
+
+            <button id="btnExportModal" class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md shadow-blue-600/20 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Exportar PNG</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- BARRA LATERAL IZQUIERDA: Herramientas de Dibujo -->
+        <aside class="w-16 sm:w-20 bg-slate-950 border-r border-slate-800 flex flex-col items-center py-2 gap-1.5 overflow-y-auto z-10 shrink-0">
+            
+            <span class="text-[9px] uppercase tracking-wider text-slate-500 font-bold mt-1">Edición</span>
+            <!-- Seleccionar / Mover -->
+            <button data-tool="select" class="tool-btn active w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Seleccionar, mover y editar (Tecla V)">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+                <span class="text-[10px] font-medium">Seleccionar</span>
+            </button>
+
+            <div class="w-10 h-[1px] bg-slate-800 my-0.5"></div>
+            <span class="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Arquitectura</span>
+
+            <!-- Muros / Paredes -->
+            <button data-tool="wall" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Dibujar Muro / Pared (Tecla W)">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 20h16M4 4h16M4 4v16M20 4v16"/></svg>
+                <span class="text-[10px] font-medium">Muro</span>
+            </button>
+
+            <!-- Puerta -->
+            <button data-tool="door" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Insertar Puerta con abatimiento (Tecla D)">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 20V5h10M5 20h14M15 5a10 10 0 014 15"/>
+                </svg>
+                <span class="text-[10px] font-medium">Puerta</span>
+            </button>
+
+            <!-- Ventana -->
+            <button data-tool="window" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Insertar Ventana (Tecla N)">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="3" y="8" width="18" height="8" stroke-width="2"/>
+                    <line x1="3" y1="12" x2="21" y2="12" stroke-width="1.5"/>
+                </svg>
+                <span class="text-[10px] font-medium">Ventana</span>
+            </button>
+
+            <!-- Cálculo de Área (m2) -->
+            <button data-tool="area" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Medir Superficie m² de habitación (Tecla A)">
+                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 9h6v6H9z"/>
+                </svg>
+                <span class="text-[10px] font-medium">Área m²</span>
+            </button>
+
+            <!-- Cotas / Medidas -->
+            <button data-tool="dimension" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Acotar / Medir distancia (Tecla M)">
+                <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h16M4 8v8M20 8v8M7 9l-3 3 3 3M17 9l3 3-3 3"/>
+                </svg>
+                <span class="text-[10px] font-medium">Cota</span>
+            </button>
+
+            <!-- Texto / Etiqueta -->
+            <button data-tool="text" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Añadir etiqueta de ambiente (Tecla T)">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M12 6v14M8 20h8"/>
+                </svg>
+                <span class="text-[10px] font-medium">Texto</span>
+            </button>
+
+            <div class="w-10 h-[1px] bg-slate-800 my-0.5"></div>
+            <span class="text-[9px] uppercase tracking-wider text-amber-500 font-bold">Seguridad</span>
+
+            <!-- Tablero Eléctrico -->
+            <button data-tool="panel_elec" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Tablero Eléctrico">
+                <svg class="w-5 h-5 text-yellow-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <rect x="3" y="6" width="18" height="12" stroke-width="2"/>
+                    <polygon points="3,6 21,6 21,18" fill="currentColor"/>
+                </svg>
+                <span class="text-[10px] font-medium text-center leading-tight">Tablero Eléc.</span>
+            </button>
+
+            <!-- Extintor -->
+            <button data-tool="extinguisher" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Extintor contra incendios">
+                <svg class="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="12" cy="12" r="9" stroke-width="2" fill="rgba(239,68,68,0.2)"/>
+                    <path d="M10 8h4v9h-4zM12 8V6h3" stroke-width="1.8"/>
+                </svg>
+                <span class="text-[10px] font-medium">Extintor</span>
+            </button>
+
+            <!-- Luz de Emergencia -->
+            <button data-tool="emerg_light" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Luz de Emergencia">
+                <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <rect x="4" y="9" width="16" height="6" rx="1" stroke-width="2"/>
+                    <circle cx="8" cy="12" r="1.5" fill="currentColor"/>
+                    <circle cx="16" cy="12" r="1.5" fill="currentColor"/>
+                    <path d="M8 6V4M16 6V4" stroke-width="1.5"/>
+                </svg>
+                <span class="text-[10px] font-medium text-center leading-tight">Luz Emerg.</span>
+            </button>
+
+            <!-- Detector de Humo -->
+            <button data-tool="smoke_det" class="tool-btn w-14 sm:w-16 py-2 rounded-xl border border-transparent hover:bg-slate-900 flex flex-col items-center gap-1 transition" title="Detector de Humo">
+                <svg class="w-5 h-5 text-orange-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="12" cy="12" r="8" stroke-width="2"/>
+                    <text x="12" y="16" text-anchor="middle" font-size="11" font-weight="bold" fill="currentColor" stroke="none">S</text>
+                </svg>
+                <span class="text-[10px] font-medium text-center leading-tight">Det. Humo</span>
+            </button>
+
+        </aside>
+
+        <!-- ÁREA CENTRAL: Lienzo CAD Interactivo -->
+        <main class="flex-1 relative bg-[#0f172a] overflow-hidden" id="canvasContainer">
+            <canvas id="cadCanvas"></canvas>
+
+            <!-- Barra flotante de Entrada Exacta de Muros (aparece al dibujar muros) -->
+            <div id="exactWallBar" class="hidden absolute top-3 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur border border-blue-500/50 rounded-xl px-4 py-2 shadow-2xl flex items-center gap-3 z-20">
+                <span class="text-xs font-medium text-blue-300">Medida exacta de muro:</span>
+                <div class="flex items-center gap-1">
+                    <input id="exactLengthInput" type="number" step="0.05" min="0.1" placeholder="Ej: 4.50" 
+                        class="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs font-mono-tech text-white focus:border-blue-500 focus:outline-none">
+                    <span class="text-xs text-slate-400">m</span>
+                </div>
+                <button id="btnApplyExactWall" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1 rounded transition">
+                    Aplicar
+                </button>
+            </div>
+
+            <!-- Instrucción rápida según herramienta activa -->
+            <div id="toolHintBar" class="absolute top-3 left-3 bg-slate-900/85 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 pointer-events-none">
+                💡 <span id="toolHintText">Haz clic en un elemento para seleccionarlo, arrastrar o editar sus propiedades.</span>
+            </div>
+
+            <!-- Barra de Estado Inferior (Coordenadas, Zoom, Atajos) -->
+            <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+                <div class="bg-slate-950/90 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 text-[11px] font-mono-tech text-slate-300 flex items-center gap-4 pointer-events-auto shadow-lg">
+                    <span>X: <strong id="coordX" class="text-white">0.00</strong> m</span>
+                    <span>Y: <strong id="coordY" class="text-white">0.00</strong> m</span>
+                    <span class="hidden sm:inline text-slate-500">|</span>
+                    <span class="hidden sm:inline">Zoom: <strong id="zoomDisplay" class="text-blue-400">100%</strong></span>
+                </div>
+
+                <div class="hidden lg:flex bg-slate-950/85 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 text-[11px] text-slate-400 items-center gap-3">
+                    <span><kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-200">Rueda</kbd> Zoom</span>
+                    <span><kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-200">Clic Der / Espacio</kbd> Mover lienzo</span>
+                    <span><kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-200">Shift</kbd> Ángulo recto</span>
+                    <span><kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-200">Supr</kbd> Eliminar</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- PANEL LATERAL DERECHO: Propiedades, Calco y Resumen de Superficies -->
+        <aside class="w-72 sm:w-80 bg-slate-950 border-l border-slate-800 flex flex-col overflow-y-auto z-10 shrink-0">
+            
+            <!-- SECCIÓN 1: Propiedades del Elemento o Herramienta Activa -->
+            <div class="p-4 border-b border-slate-800">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Propiedades</h2>
+                    <span id="selectionBadge" class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full">Ningún objeto</span>
+                </div>
+
+                <!-- Contenido dinámico de propiedades -->
+                <div id="propertiesContainer" class="space-y-3 text-xs">
+                    <p class="text-slate-500 italic">Selecciona una herramienta para configurar sus parámetros o haz clic en un objeto del plano para editarlo.</p>
+                </div>
+            </div>
+
+            <!-- SECCIÓN 2: Boceto de Referencia (Calco) -->
+            <div id="bgImagePanel" class="p-4 border-b border-slate-800">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        Boceto de Calco
+                    </h2>
+                    <button id="btnRemoveBg" class="hidden text-[11px] text-red-400 hover:text-red-300 underline">Quitar</button>
+                </div>
+
+                <div id="bgEmptyState" class="text-xs text-slate-500">
+                    Sube una foto o escaneo de un boceto a mano para calcar paredes encima.
+                </div>
+
+                <div id="bgControls" class="hidden space-y-2.5 text-xs mt-2">
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1">
+                            <span>Opacidad</span>
+                            <span id="bgOpacityVal" class="font-mono-tech">50%</span>
+                        </div>
+                        <input id="bgOpacitySlider" type="range" min="0" max="100" value="50" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1">
+                            <span>Escala (Tamaño)</span>
+                            <span id="bgScaleVal" class="font-mono-tech">1.00x</span>
+                        </div>
+                        <input id="bgScaleSlider" type="range" min="10" max="500" value="100" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[11px] text-slate-400">Posición X (m)</label>
+                            <input id="bgPosX" type="number" step="0.5" value="0" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech mt-0.5">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-slate-400">Posición Y (m)</label>
+                            <input id="bgPosY" type="number" step="0.5" value="0" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech mt-0.5">
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2 text-slate-300 pt-1 cursor-pointer">
+                        <input id="bgLockChk" type="checkbox" checked class="rounded bg-slate-800 border-slate-600 text-amber-500">
+                        <span>Bloquear imagen al calcar</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- SECCIÓN 3: Cuadro Automático de Superficies (m2) -->
+            <div class="p-4 border-b border-slate-800 flex-1">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-400">Superficies (m²)</h2>
+                    <span id="totalAreaBadge" class="text-xs font-mono-tech font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded">
+                        Total: 0.00 m²
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-500 mb-2">Usa la herramienta <strong>Área m²</strong> para marcar las esquinas de cada habitación.</p>
+                
+                <div id="areaListContainer" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    <!-- Lista dinámica de ambientes medidos -->
+                </div>
+            </div>
+
+            <!-- SECCIÓN 4: Acciones Rápidas de Proyecto -->
+            <div class="p-4 bg-slate-900/50 space-y-2">
+                <button id="btnLoadDemo" class="w-full py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition">
+                    Cargar Plano de Ejemplo
+                </button>
+                <button id="btnClearCanvas" class="w-full py-1.5 px-3 bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-medium rounded-lg border border-red-900/60 transition">
+                    Limpiar Todo el Lienzo
+                </button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- MODAL DE EXPORTACIÓN PNG -->
+    <div id="exportModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-1">Exportar Plano a Imagen (PNG)</h3>
+            <p class="text-xs text-slate-400 mb-4">Genera una lámina arquitectónica limpia lista para imprimir o compartir.</p>
+
+            <div class="space-y-3 text-xs mb-6">
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Estilo de fondo de lámina</label>
+                    <select id="exportThemeSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                        <option value="blueprint_white" selected>Papel Blanco Técnico (Ideal para imprimir)</option>
+                        <option value="blueprint_dark">Plano Oscuro CAD (Estilo pantalla)</option>
+                    </select>
+                </div>
+
+                <label class="flex items-center gap-2 text-slate-200 cursor-pointer pt-1">
+                    <input id="exportIncludeGrid" type="checkbox" checked class="rounded bg-slate-800 border-slate-600 text-blue-500">
+                    <span>Incluir cuadrícula métrica de fondo</span>
+                </label>
+
+                <label class="flex items-center gap-2 text-slate-200 cursor-pointer">
+                    <input id="exportIncludeTitleBlock" type="checkbox" checked class="rounded bg-slate-800 border-slate-600 text-blue-500">
+                    <span>Incluir rótulo / cajetín técnico y cuadro de superficies</span>
+                </label>
+
+                <label class="flex items-center gap-2 text-slate-200 cursor-pointer">
+                    <input id="exportIncludeLegend" type="checkbox" checked class="rounded bg-slate-800 border-slate-600 text-blue-500">
+                    <span>Incluir leyenda de simbología de seguridad</span>
+                </label>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button id="btnCancelExport" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium">Cancelar</button>
+                <button id="btnConfirmExport" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-lg shadow-blue-600/30">Descargar PNG</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMACIÓN PERSONALIZADO (Sin usar alert/confirm) -->
+    <div id="confirmModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl">
+            <h3 id="confirmTitle" class="text-base font-bold text-white mb-2">Confirmar acción</h3>
+            <p id="confirmMessage" class="text-xs text-slate-300 mb-5">¿Estás seguro de continuar?</p>
+            <div class="flex justify-end gap-2">
+                <button id="btnConfirmCancel" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Cancelar</button>
+                <button id="btnConfirmOk" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICACIÓN TOAST FLOTANTE -->
+    <div id="toastNotification" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 text-white text-xs px-4 py-2 rounded-full shadow-xl z-50 transition-opacity">
+        Mensaje
+    </div>
+
+    <!-- LÓGICA DE LA APLICACIÓN CAD 2D -->
+    <script>
+        /**
+         * ARCHISKETCH 2D - MOTOR CAD LIGERO EN JAVASCRIPT PURO
+         * Escala base del mundo: 1 metro = 60 píxeles a zoom 1.0
+         */
+        const PIXELS_PER_METER = 60;
+
+        // Estado global de la aplicación
+        const state = {
+            elements: [],          // Lista de objetos arquitectónicos
+            selectedId: null,      // ID del elemento seleccionado
+            activeTool: 'select',  // Herramienta actual
+            
+            // Parámetros por defecto para nuevas creaciones
+            defaults: {
+                wallThickness: 0.20,
+                doorWidth: 0.85,
+                doorFlip: false,
+                windowWidth: 1.20,
+                textLabel: 'Dormitorio',
+                textSize: 0.35, // en metros
+                symbolScale: 1.0,
+                areaName: 'Ambiente'
+            },
+
+            // Transformación de cámara (Viewport)
+            camera: {
+                x: 0,      // desplazamiento en píxeles
+                y: 0,
+                zoom: 1.0
+            },
+
+            // Configuración de cuadrícula
+            snapEnabled: true,
+            snapSize: 0.10, // metros
+
+            // Imagen de fondo (boceto)
+            bgImage: {
+                img: null,
+                dataUrl: null,
+                opacity: 0.5,
+                scale: 1.0,
+                x: 0,
+                y: 0,
+                locked: true
+            },
+
+            // Estado de interacción con ratón/táctil
+            interaction: {
+                isPanning: false,
+                spacePressed: false,
+                shiftPressed: false,
+                panStart: { x: 0, y: 0 },
+                isDrawing: false,
+                drawStart: null,       // {x, y} en metros
+                currentMouseWorld: { x: 0, y: 0 },
+                areaPoints: [],        // Puntos acumulados para polígono de área
+                isDraggingElement: false,
+                dragOffset: { x: 0, y: 0 }
+            },
+
+            // Historial Deshacer / Rehacer
+            history: [],
+            historyIndex: -1
+        };
+
+        // Referencias al DOM
+        const canvas = document.getElementById('cadCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvasContainer');
+
+        // Generar ID único
+        const uid = () => 'el_' + Math.random().toString(36).substr(2, 9);
+
+        // Mostrar notificación Toast
+        function showToast(msg) {
+            const toast = document.getElementById('toastNotification');
+            toast.textContent = msg;
+            toast.classList.remove('hidden');
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => toast.classList.add('hidden'), 2600);
+        }
+
+        // Modal de confirmación personalizado
+        function showConfirm(title, message, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            modal.classList.remove('hidden');
+
+            const okBtn = document.getElementById('btnConfirmOk');
+            const cancelBtn = document.getElementById('btnConfirmCancel');
+
+            const cleanup = () => modal.classList.add('hidden');
+            okBtn.onclick = () => { cleanup(); onConfirm(); };
+            cancelBtn.onclick = cleanup;
+        }
+
+        // =========================================================================
+        // 1. CONVERSIÓN DE COORDENADAS (PANTALLA <-> MUNDO EN METROS)
+        // =========================================================================
+        function screenToWorld(sx, sy) {
+            const wx = (sx - canvas.width / 2 - state.camera.x) / (PIXELS_PER_METER * state.camera.zoom);
+            const wy = (sy - canvas.height / 2 - state.camera.y) / (PIXELS_PER_METER * state.camera.zoom);
+            return { x: wx, y: wy };
+        }
+
+        function worldToScreen(wx, wy) {
+            const sx = wx * PIXELS_PER_METER * state.camera.zoom + canvas.width / 2 + state.camera.x;
+            const sy = wy * PIXELS_PER_METER * state.camera.zoom + canvas.height / 2 + state.camera.y;
+            return { x: sx, y: sy };
+        }
+
+        function applySnap(pt) {
+            if (!state.snapEnabled) return { x: pt.x, y: pt.y };
+            const s = state.snapSize;
+            return {
+                x: Math.round(pt.x / s) * s,
+                y: Math.round(pt.y / s) * s
+            };
+        }
+
+        // Restricción ortogonal (Shift) o ángulo de 45°
+        function applyOrtho(start, end) {
+            if (!state.interaction.shiftPressed) return end;
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                return { x: end.x, y: start.y };
+            } else {
+                return { x: start.x, y: end.y };
+            }
+        }
+
+        // =========================================================================
+        // 2. HISTORIAL (DESHACER / REHACER) Y ALMACENAMIENTO LOCAL
+        // =========================================================================
+        function saveHistory() {
+            // Cortar futuro si estábamos en medio del historial
+            state.history = state.history.slice(0, state.historyIndex + 1);
+            state.history.push(JSON.stringify(state.elements));
+            if (state.history.length > 40) state.history.shift();
+            state.historyIndex = state.history.length - 1;
+            updateHistoryButtons();
+            autoSaveLocal();
+            updateAreaSummary();
+        }
+
+        function undo() {
+            if (state.historyIndex > 0) {
+                state.historyIndex--;
+                state.elements = JSON.parse(state.history[state.historyIndex]);
+                state.selectedId = null;
+                updateHistoryButtons();
+                renderPropertiesPanel();
+                updateAreaSummary();
+                render();
+            }
+        }
+
+        function redo() {
+            if (state.historyIndex < state.history.length - 1) {
+                state.historyIndex++;
+                state.elements = JSON.parse(state.history[state.historyIndex]);
+                state.selectedId = null;
+                updateHistoryButtons();
+                renderPropertiesPanel();
+                updateAreaSummary();
+                render();
+            }
+        }
+
+        function updateHistoryButtons() {
+            document.getElementById('btnUndo').disabled = state.historyIndex <= 0;
+            document.getElementById('btnRedo').disabled = state.historyIndex >= state.history.length - 1;
+        }
+
+        function autoSaveLocal() {
+            try {
+                const payload = {
+                    title: document.getElementById('projectTitleInput').value,
+                    elements: state.elements
+                };
+                localStorage.setItem('archisketch_autosave', JSON.stringify(payload));
+            } catch (e) { /* Ignorar si supera cuota */ }
+        }
+
+        // =========================================================================
+        // 3. CÁLCULOS GEOMÉTRICOS Y DETECCIÓN DE CLICS (HIT TESTING)
+        // =========================================================================
+        function dist(p1, p2) {
+            return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        }
+
+        // Distancia de punto P al segmento AB
+        function distToSegment(p, a, b) {
+            const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+            if (l2 === 0) return dist(p, a);
+            let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return dist(p, { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+        }
+
+        // Área de polígono (Fórmula de Shoelace) en m²
+        function calculatePolygonArea(points) {
+            if (!points || points.length < 3) return 0;
+            let area = 0;
+            for (let i = 0; i < points.length; i++) {
+                const j = (i + 1) % points.length;
+                area += points[i].x * points[j].y;
+                area -= points[j].x * points[i].y;
+            }
+            return Math.abs(area / 2);
+        }
+
+        // Centroide de polígono
+        function getPolygonCentroid(points) {
+            let cx = 0, cy = 0;
+            points.forEach(p => { cx += p.x; cy += p.y; });
+            return { x: cx / points.length, y: cy / points.length };
+        }
+
+        // Verificar si punto está dentro de polígono (Ray Casting)
+        function pointInPolygon(pt, vs) {
+            let inside = false;
+            for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+                const xi = vs[i].x, yi = vs[i].y;
+                const xj = vs[j].x, yj = vs[j].y;
+                const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+                    (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi + 0.00001) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // Encontrar elemento bajo el cursor
+        function hitTest(worldPt) {
+            const tolerance = 0.25 / Math.sqrt(state.camera.zoom);
+            // Recorrer de arriba hacia abajo (últimos dibujados primero)
+            for (let i = state.elements.length - 1; i >= 0; i--) {
+                const el = state.elements[i];
+                if (el.type === 'wall' || el.type === 'dimension') {
+                    const hitDist = Math.max(tolerance, (el.thickness || 0.2) / 2 + 0.1);
+                    if (distToSegment(worldPt, el.start, el.end) <= hitDist) return el;
+                } else if (el.type === 'door' || el.type === 'window') {
+                    const w = el.width || 0.9;
+                    if (dist(worldPt, { x: el.x, y: el.y }) <= w / 2 + 0.2) return el;
+                } else if (['panel_elec', 'extinguisher', 'emerg_light', 'smoke_det', 'text'].includes(el.type)) {
+                    if (dist(worldPt, { x: el.x, y: el.y }) <= 0.45) return el;
+                } else if (el.type === 'area') {
+                    if (pointInPolygon(worldPt, el.points)) return el;
+                }
+            }
+            return null;
+        }
+
+        // =========================================================================
+        // 4. RENDERIZADO EN CANVAS (DIBUJO TÉCNICO ARQUITECTÓNICO)
+        // =========================================================================
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            render();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function render(targetCtx = ctx, options = {}) {
+            const isExport = options.isExport || false;
+            const theme = options.theme || 'blueprint_dark';
+            const showGrid = options.showGrid !== undefined ? options.showGrid : true;
+
+            const w = targetCtx.canvas.width;
+            const h = targetCtx.canvas.height;
+
+            // Colores según tema (Pantalla oscura vs Exportación papel blanco)
+            const colors = theme === 'blueprint_white' ? {
+                bg: '#ffffff',
+                gridMinor: '#f1f5f9',
+                gridMajor: '#cbd5e1',
+                axis: '#94a3b8',
+                wallFill: '#1e293b',
+                wallStroke: '#0f172a',
+                doorStroke: '#0284c7',
+                doorArc: 'rgba(2, 132, 199, 0.35)',
+                windowFill: '#ffffff',
+                windowStroke: '#0284c7',
+                dimColor: '#475569',
+                textColor: '#0f172a',
+                areaFill: 'rgba(16, 185, 129, 0.10)',
+                areaStroke: '#059669'
+            } : {
+                bg: '#0f172a',
+                gridMinor: '#1e293b',
+                gridMajor: '#334155',
+                axis: '#475569',
+                wallFill: '#e2e8f0',
+                wallStroke: '#ffffff',
+                doorStroke: '#38bdf8',
+                doorArc: 'rgba(56, 189, 248, 0.3)',
+                windowFill: '#0f172a',
+                windowStroke: '#38bdf8',
+                dimColor: '#94a3b8',
+                textColor: '#f8fafc',
+                areaFill: 'rgba(16, 185, 129, 0.14)',
+                areaStroke: '#34d399'
+            };
+
+            // 1. Fondo
+            targetCtx.fillStyle = colors.bg;
+            targetCtx.fillRect(0, 0, w, h);
+
+            targetCtx.save();
+            // Aplicar transformación de cámara
+            if (!isExport) {
+                targetCtx.translate(w / 2 + state.camera.x, h / 2 + state.camera.y);
+                targetCtx.scale(PIXELS_PER_METER * state.camera.zoom, PIXELS_PER_METER * state.camera.zoom);
+            } else {
+                // En exportación se pasa la transformación en options
+                targetCtx.translate(options.offsetX, options.offsetY);
+                targetCtx.scale(options.scale, options.scale);
+            }
+
+            // 2. Cuadrícula métrica
+            if (showGrid) {
+                drawGrid(targetCtx, colors, isExport ? options.bounds : null);
+            }
+
+            // 3. Imagen de fondo (Boceto de calco) - solo en pantalla, no en exportación limpia
+            if (!isExport && state.bgImage.img) {
+                targetCtx.save();
+                targetCtx.globalAlpha = state.bgImage.opacity;
+                const imgW = (state.bgImage.img.width / PIXELS_PER_METER) * state.bgImage.scale;
+                const imgH = (state.bgImage.img.height / PIXELS_PER_METER) * state.bgImage.scale;
+                targetCtx.drawImage(
+                    state.bgImage.img,
+                    state.bgImage.x - imgW / 2,
+                    state.bgImage.y - imgH / 2,
+                    imgW,
+                    imgH
+                );
+                targetCtx.restore();
+            }
+
+            // 4. Dibujar Áreas / Habitaciones (debajo de los muros)
+            state.elements.filter(el => el.type === 'area').forEach(el => {
+                drawAreaElement(targetCtx, el, colors, !isExport && el.id === state.selectedId);
+            });
+
+            // 5. Dibujar Muros
+            state.elements.filter(el => el.type === 'wall').forEach(el => {
+                drawWallElement(targetCtx, el, colors, !isExport && el.id === state.selectedId);
+            });
+
+            // 6. Dibujar Puertas y Ventanas (encima de muros para recortar visualmente)
+            state.elements.filter(el => el.type === 'door' || el.type === 'window').forEach(el => {
+                if (el.type === 'door') drawDoorElement(targetCtx, el, colors, !isExport && el.id === state.selectedId);
+                if (el.type === 'window') drawWindowElement(targetCtx, el, colors, !isExport && el.id === state.selectedId);
+            });
+
+            // 7. Dibujar Cotas, Textos y Señalización de Seguridad
+            state.elements.forEach(el => {
+                const isSel = !isExport && el.id === state.selectedId;
+                if (el.type === 'dimension') drawDimensionElement(targetCtx, el, colors, isSel);
+                if (el.type === 'text') drawTextElement(targetCtx, el, colors, isSel);
+                if (['panel_elec', 'extinguisher', 'emerg_light', 'smoke_det'].includes(el.type)) {
+                    drawSafetySymbol(targetCtx, el, colors, isSel);
+                }
+            });
+
+            // 8. Vista previa mientras se dibuja (Ghost preview)
+            if (!isExport) {
+                drawActivePreview(targetCtx, colors);
+            }
+
+            targetCtx.restore();
+        }
+
+        // Dibujar cuadrícula cada 0.50m (menor) y 1.00m (mayor)
+        function drawGrid(c, colors, customBounds) {
+            let minX, maxX, minY, maxY;
+            if (customBounds) {
+                minX = Math.floor(customBounds.minX) - 2;
+                maxX = Math.ceil(customBounds.maxX) + 2;
+                minY = Math.floor(customBounds.minY) - 2;
+                maxY = Math.ceil(customBounds.maxY) + 2;
+            } else {
+                const tl = screenToWorld(0, 0);
+                const br = screenToWorld(canvas.width, canvas.height);
+                minX = Math.floor(tl.x) - 1;
+                maxX = Math.ceil(br.x) + 1;
+                minY = Math.floor(tl.y) - 1;
+                maxY = Math.ceil(br.y) + 1;
+            }
+
+            const step = state.camera.zoom > 0.5 ? 0.5 : 1.0;
+            c.lineWidth = 0.015;
+
+            for (let x = minX; x <= maxX; x += step) {
+                const isMajor = Math.abs(Math.round(x) - x) < 0.01;
+                c.strokeStyle = Math.abs(x) < 0.01 ? colors.axis : (isMajor ? colors.gridMajor : colors.gridMinor);
+                c.beginPath();
+                c.moveTo(x, minY);
+                c.lineTo(x, maxY);
+                c.stroke();
+            }
+
+            for (let y = minY; y <= maxY; y += step) {
+                const isMajor = Math.abs(Math.round(y) - y) < 0.01;
+                c.strokeStyle = Math.abs(y) < 0.01 ? colors.axis : (isMajor ? colors.gridMajor : colors.gridMinor);
+                c.beginPath();
+                c.moveTo(minX, y);
+                c.lineTo(maxX, y);
+                c.stroke();
+            }
+        }
+
+        // Dibujar Muro arquitectónico
+        function drawWallElement(c, el, colors, isSelected) {
+            const dx = el.end.x - el.start.x;
+            const dy = el.end.y - el.start.y;
+            const len = Math.hypot(dx, dy);
+            if (len < 0.01) return;
+
+            const angle = Math.atan2(dy, dx);
+            const thick = el.thickness || 0.20;
+
+            c.save();
+            c.translate(el.start.x, el.start.y);
+            c.rotate(angle);
+
+            c.fillStyle = isSelected ? '#3b82f6' : colors.wallFill;
+            c.strokeStyle = isSelected ? '#93c5fd' : colors.wallStroke;
+            c.lineWidth = 0.02;
+
+            c.fillRect(0, -thick / 2, len, thick);
+            c.strokeRect(0, -thick / 2, len, thick);
+
+            // Mostrar medida del muro si está seleccionado
+            if (isSelected) {
+                c.save();
+                c.translate(len / 2, -thick / 2 - 0.18);
+                if (angle > Math.PI / 2 || angle < -Math.PI / 2) c.rotate(Math.PI);
+                c.fillStyle = '#60a5fa';
+                c.font = 'bold 0.22px "JetBrains Mono", monospace';
+                c.textAlign = 'center';
+                c.fillText(`${len.toFixed(2)} m`, 0, 0);
+                c.restore();
+            }
+            c.restore();
+        }
+
+        // Dibujar Puerta con arco de abatimiento
+        function drawDoorElement(c, el, colors, isSelected) {
+            const w = el.width || 0.85;
+            const thick = 0.22;
+            const flip = el.flip ? -1 : 1;
+
+            c.save();
+            c.translate(el.x, el.y);
+            c.rotate((el.rotation || 0) * Math.PI / 180);
+
+            // Fondo para limpiar visualmente el muro donde va la puerta
+            c.fillStyle = colors.bg;
+            c.fillRect(-w / 2, -thick / 2, w, thick);
+
+            // Marcos de puerta (jambas)
+            c.fillStyle = isSelected ? '#3b82f6' : colors.wallFill;
+            c.fillRect(-w / 2, -thick / 2, 0.06, thick);
+            c.fillRect(w / 2 - 0.06, -thick / 2, 0.06, thick);
+
+            // Hoja de la puerta abierta a 90°
+            c.strokeStyle = isSelected ? '#60a5fa' : colors.doorStroke;
+            c.lineWidth = 0.035;
+            c.beginPath();
+            c.moveTo(-w / 2 + 0.04, 0);
+            c.lineTo(-w / 2 + 0.04, -w * flip);
+            c.stroke();
+
+            // Arco de abatimiento discontinuo
+            c.setLineDash([0.08, 0.06]);
+            c.lineWidth = 0.02;
+            c.strokeStyle = isSelected ? '#60a5fa' : colors.doorArc;
+            c.beginPath();
+            if (flip === 1) {
+                c.arc(-w / 2 + 0.04, 0, w - 0.04, -Math.PI / 2, 0);
+            } else {
+                c.arc(-w / 2 + 0.04, 0, w - 0.04, 0, Math.PI / 2);
+            }
+            c.stroke();
+            c.setLineDash([]);
+
+            if (isSelected) {
+                c.strokeStyle = '#3b82f6';
+                c.lineWidth = 0.02;
+                c.strokeRect(-w / 2 - 0.08, -w - 0.08, w + 0.16, w * 2 + 0.16);
+            }
+
+            c.restore();
+        }
+
+        // Dibujar Ventana arquitectónica
+        function drawWindowElement(c, el, colors, isSelected) {
+            const w = el.width || 1.20;
+            const thick = 0.22;
+
+            c.save();
+            c.translate(el.x, el.y);
+            c.rotate((el.rotation || 0) * Math.PI / 180);
+
+            // Caja blanca/oscura del vano
+            c.fillStyle = colors.windowFill;
+            c.strokeStyle = isSelected ? '#3b82f6' : colors.windowStroke;
+            c.lineWidth = 0.025;
+            c.fillRect(-w / 2, -thick / 2, w, thick);
+            c.strokeRect(-w / 2, -thick / 2, w, thick);
+
+            // Líneas centrales de vidrio
+            c.lineWidth = 0.015;
+            c.beginPath();
+            c.moveTo(-w / 2, -0.025);
+            c.lineTo(w / 2, -0.025);
+            c.moveTo(-w / 2, 0.025);
+            c.lineTo(w / 2, 0.025);
+            c.stroke();
+
+            c.restore();
+        }
+
+        // Dibujar Cota / Medida manual
+        function drawDimensionElement(c, el, colors, isSelected) {
+            const dx = el.end.x - el.start.x;
+            const dy = el.end.y - el.start.y;
+            const len = Math.hypot(dx, dy);
+            if (len < 0.02) return;
+
+            const angle = Math.atan2(dy, dx);
+            const color = isSelected ? '#3b82f6' : colors.dimColor;
+
+            c.save();
+            c.translate(el.start.x, el.start.y);
+            c.rotate(angle);
+
+            c.strokeStyle = color;
+            c.lineWidth = 0.02;
+
+            // Línea principal
+            c.beginPath();
+            c.moveTo(0, 0);
+            c.lineTo(len, 0);
+            c.stroke();
+
+            // Ticks oblicuos en los extremos (estilo arquitectónico)
+            const tick = 0.10;
+            c.beginPath();
+            c.moveTo(-tick, tick); c.lineTo(tick, -tick);
+            c.moveTo(len - tick, tick); c.lineTo(len + tick, -tick);
+            c.moveTo(0, -0.15); c.lineTo(0, 0.15);
+            c.moveTo(len, -0.15); c.lineTo(len, 0.15);
+            c.stroke();
+
+            // Texto de medida
+            c.save();
+            c.translate(len / 2, -0.12);
+            if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
+                c.rotate(Math.PI);
+                c.translate(0, 0.28);
+            }
+            c.fillStyle = color;
+            c.font = '600 0.22px "JetBrains Mono", monospace';
+            c.textAlign = 'center';
+            c.fillText(`${len.toFixed(2)} m`, 0, 0);
+            c.restore();
+
+            c.restore();
+        }
+
+        // Dibujar Etiqueta de Texto
+        function drawTextElement(c, el, colors, isSelected) {
+            const size = el.size || 0.35;
+            c.save();
+            c.translate(el.x, el.y);
+            c.rotate((el.rotation || 0) * Math.PI / 180);
+
+            c.font = `600 ${size}px "Inter", sans-serif`;
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillStyle = isSelected ? '#3b82f6' : colors.textColor;
+            c.fillText(el.text || 'Ambiente', 0, 0);
+
+            if (isSelected) {
+                const metrics = c.measureText(el.text || 'Ambiente');
+                c.strokeStyle = '#3b82f6';
+                c.lineWidth = 0.02;
+                c.strokeRect(-metrics.width / 2 - 0.1, -size / 2 - 0.08, metrics.width + 0.2, size + 0.16);
+            }
+            c.restore();
+        }
+
+        // Dibujar Polígono de Superficie (m²)
+        function drawAreaElement(c, el, colors, isSelected) {
+            if (!el.points || el.points.length < 3) return;
+            const area = calculatePolygonArea(el.points);
+            const center = getPolygonCentroid(el.points);
+
+            c.save();
+            c.beginPath();
+            el.points.forEach((p, idx) => {
+                if (idx === 0) c.moveTo(p.x, p.y);
+                else c.lineTo(p.x, p.y);
+            });
+            c.closePath();
+
+            c.fillStyle = isSelected ? 'rgba(59, 130, 246, 0.22)' : colors.areaFill;
+            c.fill();
+
+            c.strokeStyle = isSelected ? '#3b82f6' : colors.areaStroke;
+            c.lineWidth = 0.025;
+            c.setLineDash([0.1, 0.08]);
+            c.stroke();
+            c.setLineDash([]);
+
+            // Etiqueta central con nombre y m²
+            c.fillStyle = isSelected ? '#60a5fa' : colors.areaStroke;
+            c.font = 'bold 0.26px "Inter", sans-serif';
+            c.textAlign = 'center';
+            c.fillText(el.name || 'Ambiente', center.x, center.y - 0.08);
+
+            c.font = '600 0.23px "JetBrains Mono", monospace';
+            c.fillText(`${area.toFixed(2)} m²`, center.x, center.y + 0.20);
+
+            c.restore();
+        }
+
+        // Dibujar Señalización de Seguridad (Simbología técnica estándar)
+        function drawSafetySymbol(c, el, colors, isSelected) {
+            const sc = el.scale || 1.0;
+            c.save();
+            c.translate(el.x, el.y);
+            c.rotate((el.rotation || 0) * Math.PI / 180);
+            c.scale(sc, sc);
+
+            if (el.type === 'panel_elec') {
+                // Tablero Eléctrico: Rectángulo con triángulo diagonal relleno
+                const w = 0.50, h = 0.26;
+                c.fillStyle = colors.bg;
+                c.strokeStyle = '#eab308';
+                c.lineWidth = 0.03;
+                c.fillRect(-w / 2, -h / 2, w, h);
+                c.strokeRect(-w / 2, -h / 2, w, h);
+
+                c.fillStyle = '#eab308';
+                c.beginPath();
+                c.moveTo(-w / 2, -h / 2);
+                c.lineTo(w / 2, -h / 2);
+                c.lineTo(w / 2, h / 2);
+                c.closePath();
+                c.fill();
+
+                c.font = 'bold 0.14px "Inter", sans-serif';
+                c.textAlign = 'center';
+                c.fillText('TE', 0, h / 2 + 0.18);
+            } 
+            else if (el.type === 'extinguisher') {
+                // Extintor: Círculo rojo con triángulo/cilindro interior
+                const r = 0.22;
+                c.fillStyle = '#ef4444';
+                c.strokeStyle = '#ffffff';
+                c.lineWidth = 0.025;
+                c.beginPath();
+                c.arc(0, 0, r, 0, Math.PI * 2);
+                c.fill();
+                c.stroke();
+
+                c.fillStyle = '#ffffff';
+                c.font = 'bold 0.20px "Inter", sans-serif';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                c.fillText('EXT', 0, 0.01);
+            } 
+            else if (el.type === 'emerg_light') {
+                // Luz de Emergencia: Caja con dos focos y haces de luz
+                const w = 0.46, h = 0.20;
+                c.fillStyle = '#10b981';
+                c.strokeStyle = colors.textColor;
+                c.lineWidth = 0.025;
+                c.fillRect(-w / 2, -h / 2, w, h);
+                c.strokeRect(-w / 2, -h / 2, w, h);
+
+                // Dos focos circulares
+                c.fillStyle = '#ffffff';
+                c.beginPath();
+                c.arc(-w / 4, -h / 2 - 0.05, 0.05, 0, Math.PI * 2);
+                c.arc(w / 4, -h / 2 - 0.05, 0.05, 0, Math.PI * 2);
+                c.fill();
+
+                c.fillStyle = '#10b981';
+                c.font = 'bold 0.13px "Inter", sans-serif';
+                c.textAlign = 'center';
+                c.fillText('LE', 0, h / 2 + 0.17);
+            } 
+            else if (el.type === 'smoke_det') {
+                // Detector de Humo: Círculo naranja/rojo con 'S'
+                const r = 0.20;
+                c.fillStyle = colors.bg;
+                c.strokeStyle = '#f97316';
+                c.lineWidth = 0.035;
+                c.beginPath();
+                c.arc(0, 0, r, 0, Math.PI * 2);
+                c.fill();
+                c.stroke();
+
+                c.fillStyle = '#f97316';
+                c.font = 'bold 0.22px "Inter", sans-serif';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                c.fillText('S', 0, 0.01);
+            }
+
+            if (isSelected) {
+                c.strokeStyle = '#3b82f6';
+                c.lineWidth = 0.025;
+                c.strokeRect(-0.34, -0.34, 0.68, 0.68);
+            }
+
+            c.restore();
+        }
+
+        // Dibujar vista previa en tiempo real mientras se usa una herramienta
+        function drawActivePreview(c, colors) {
+            const tool = state.activeTool;
+            const mouse = state.interaction.currentMouseWorld;
+
+            // Dibujo de Muro o Cota en progreso
+            if (state.interaction.isDrawing && state.interaction.drawStart && (tool === 'wall' || tool === 'dimension')) {
+                const start = state.interaction.drawStart;
+                const end = applyOrtho(start, mouse);
+                const len = dist(start, end);
+
+                if (tool === 'wall') {
+                    drawWallElement(c, {
+                        start, end, thickness: state.defaults.wallThickness
+                    }, colors, true);
+                } else {
+                    drawDimensionElement(c, { start, end }, colors, true);
+                }
+
+                // Etiqueta flotante con la medida en tiempo real
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2;
+                c.save();
+                c.fillStyle = '#2563eb';
+                c.fillRect(midX - 0.55, midY - 0.45, 1.10, 0.30);
+                c.fillStyle = '#ffffff';
+                c.font = 'bold 0.20px "JetBrains Mono", monospace';
+                c.textAlign = 'center';
+                c.fillText(`${len.toFixed(2)} m`, midX, midY - 0.23);
+                c.restore();
+            }
+
+            // Polígono de Área en construcción
+            if (tool === 'area' && state.interaction.areaPoints.length > 0) {
+                const pts = [...state.interaction.areaPoints, mouse];
+                c.save();
+                c.beginPath();
+                pts.forEach((p, idx) => idx === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y));
+                c.closePath();
+                c.fillStyle = 'rgba(16, 185, 129, 0.22)';
+                c.fill();
+                c.strokeStyle = '#10b981';
+                c.lineWidth = 0.03;
+                c.stroke();
+
+                // Puntos de vértices
+                state.interaction.areaPoints.forEach((p, i) => {
+                    c.fillStyle = i === 0 ? '#f59e0b' : '#10b981';
+                    c.beginPath();
+                    c.arc(p.x, p.y, 0.08, 0, Math.PI * 2);
+                    c.fill();
+                });
+
+                if (pts.length >= 3) {
+                    const tempArea = calculatePolygonArea(pts);
+                    c.fillStyle = '#34d399';
+                    c.font = 'bold 0.24px "JetBrains Mono", monospace';
+                    c.textAlign = 'center';
+                    c.fillText(`${tempArea.toFixed(2)} m²`, mouse.x, mouse.y - 0.25);
+                }
+                c.restore();
+            }
+
+            // Vista previa fantasma de Puerta, Ventana o Símbolo antes de hacer clic
+            if (['door', 'window', 'panel_elec', 'extinguisher', 'emerg_light', 'smoke_det', 'text'].includes(tool)) {
+                c.save();
+                c.globalAlpha = 0.65;
+                if (tool === 'door') {
+                    drawDoorElement(c, { x: mouse.x, y: mouse.y, width: state.defaults.doorWidth, rotation: 0, flip: state.defaults.doorFlip }, colors, false);
+                } else if (tool === 'window') {
+                    drawWindowElement(c, { x: mouse.x, y: mouse.y, width: state.defaults.windowWidth, rotation: 0 }, colors, false);
+                } else if (tool === 'text') {
+                    drawTextElement(c, { x: mouse.x, y: mouse.y, text: state.defaults.textLabel, size: state.defaults.textSize }, colors, false);
+                } else {
+                    drawSafetySymbol(c, { type: tool, x: mouse.x, y: mouse.y, scale: state.defaults.symbolScale }, colors, false);
+                }
+                c.restore();
+            }
+
+            // Cursor de ajuste (Snap indicator)
+            if (tool !== 'select') {
+                c.save();
+                c.strokeStyle = '#38bdf8';
+                c.lineWidth = 0.02;
+                c.beginPath();
+                c.arc(mouse.x, mouse.y, 0.07, 0, Math.PI * 2);
+                c.stroke();
+                c.restore();
+            }
+        }
+
+        // =========================================================================
+        // 5. EVENTOS DEL RATÓN Y TECLADO
+        // =========================================================================
+        function getCanvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const screenPt = getCanvasCoords(e);
+            const rawWorld = screenToWorld(screenPt.x, screenPt.y);
+            const worldPt = applySnap(rawWorld);
+
+            // Clic derecho o Barra espaciadora = Paneo
+            if (e.button === 2 || e.button === 1 || state.interaction.spacePressed) {
+                state.interaction.isPanning = true;
+                state.interaction.panStart = { x: screenPt.x - state.camera.x, y: screenPt.y - state.camera.y };
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+
+            if (e.button !== 0) return;
+
+            const tool = state.activeTool;
+
+            // 1. HERRAMIENTA SELECCIONAR
+            if (tool === 'select') {
+                const hit = hitTest(rawWorld);
+                state.selectedId = hit ? hit.id : null;
+                renderPropertiesPanel();
+
+                if (hit) {
+                    state.interaction.isDraggingElement = true;
+                    state.interaction.dragLastPt = worldPt;
+                }
+                render();
+                return;
+            }
+
+            // 2. HERRAMIENTA MURO O COTA
+            if (tool === 'wall' || tool === 'dimension') {
+                if (!state.interaction.isDrawing) {
+                    state.interaction.isDrawing = true;
+                    state.interaction.drawStart = worldPt;
+                    if (tool === 'wall') {
+                        document.getElementById('exactWallBar').classList.remove('hidden');
+                        document.getElementById('exactLengthInput').value = '';
+                        setTimeout(() => document.getElementById('exactLengthInput').focus(), 50);
+                    }
+                } else {
+                    const endPt = applyOrtho(state.interaction.drawStart, worldPt);
+                    if (dist(state.interaction.drawStart, endPt) >= 0.05) {
+                        const newEl = {
+                            id: uid(),
+                            type: tool,
+                            start: { ...state.interaction.drawStart },
+                            end: { ...endPt },
+                            thickness: state.defaults.wallThickness
+                        };
+                        state.elements.push(newEl);
+                        saveHistory();
+
+                        // Si es muro, encadenar el siguiente muro automáticamente desde el final
+                        if (tool === 'wall') {
+                            state.interaction.drawStart = { ...endPt };
+                        } else {
+                            state.interaction.isDrawing = false;
+                            state.interaction.drawStart = null;
+                        }
+                    }
+                }
+                render();
+                return;
+            }
+
+            // 3. HERRAMIENTA ÁREA (POLÍGONO DE SUPERFICIE m²)
+            if (tool === 'area') {
+                const pts = state.interaction.areaPoints;
+                // Si hace clic cerca del primer punto y hay al menos 3 puntos, cerrar polígono
+                if (pts.length >= 3 && dist(worldPt, pts[0]) < 0.25) {
+                    const areaEl = {
+                        id: uid(),
+                        type: 'area',
+                        name: `${state.defaults.areaName} ${state.elements.filter(x => x.type === 'area').length + 1}`,
+                        points: [...pts]
+                    };
+                    state.elements.push(areaEl);
+                    state.interaction.areaPoints = [];
+                    saveHistory();
+                    showToast(`Superficie calculada: ${calculatePolygonArea(areaEl.points).toFixed(2)} m²`);
+                } else {
+                    pts.push(worldPt);
+                }
+                render();
+                return;
+            }
+
+            // 4. INSERCIÓN DIRECTA (Puerta, Ventana, Texto, Señalización)
+            const newObj = {
+                id: uid(),
+                type: tool,
+                x: worldPt.x,
+                y: worldPt.y,
+                rotation: 0
+            };
+
+            if (tool === 'door') {
+                newObj.width = state.defaults.doorWidth;
+                newObj.flip = state.defaults.doorFlip;
+            } else if (tool === 'window') {
+                newObj.width = state.defaults.windowWidth;
+            } else if (tool === 'text') {
+                newObj.text = state.defaults.textLabel;
+                newObj.size = state.defaults.textSize;
+            } else {
+                newObj.scale = state.defaults.symbolScale;
+            }
+
+            state.elements.push(newObj);
+            state.selectedId = newObj.id;
+            saveHistory();
+            renderPropertiesPanel();
+            render();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const screenPt = getCanvasCoords(e);
+
+            if (state.interaction.isPanning) {
+                state.camera.x = screenPt.x - state.interaction.panStart.x;
+                state.camera.y = screenPt.y - state.interaction.panStart.y;
+                render();
+                return;
+            }
+
+            const rawWorld = screenToWorld(screenPt.x, screenPt.y);
+            const snapped = applySnap(rawWorld);
+            state.interaction.currentMouseWorld = snapped;
+
+            // Actualizar coordenadas en barra inferior
+            document.getElementById('coordX').textContent = snapped.x.toFixed(2);
+            document.getElementById('coordY').textContent = snapped.y.toFixed(2);
+
+            // Arrastrar elemento seleccionado
+            if (state.interaction.isDraggingElement && state.selectedId) {
+                const el = state.elements.find(x => x.id === state.selectedId);
+                if (el) {
+                    const dx = snapped.x - state.interaction.dragLastPt.x;
+                    const dy = snapped.y - state.interaction.dragLastPt.y;
+                    if (dx !== 0 || dy !== 0) {
+                        if (el.type === 'wall' || el.type === 'dimension') {
+                            el.start.x += dx; el.start.y += dy;
+                            el.end.x += dx; el.end.y += dy;
+                        } else if (el.type === 'area') {
+                            el.points.forEach(p => { p.x += dx; p.y += dy; });
+                        } else {
+                            el.x += dx; el.y += dy;
+                        }
+                        state.interaction.dragLastPt = snapped;
+                        renderPropertiesPanel();
+                    }
+                }
+            }
+
+            render();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (state.interaction.isPanning) {
+                state.interaction.isPanning = false;
+                canvas.style.cursor = state.activeTool === 'select' ? 'default' : 'crosshair';
+            }
+            if (state.interaction.isDraggingElement) {
+                state.interaction.isDraggingElement = false;
+                saveHistory();
+            }
+        });
+
+        // Doble clic para finalizar polígono de área rápidamente
+        canvas.addEventListener('dblclick', () => {
+            if (state.activeTool === 'area' && state.interaction.areaPoints.length >= 3) {
+                const areaEl = {
+                    id: uid(),
+                    type: 'area',
+                    name: `${state.defaults.areaName} ${state.elements.filter(x => x.type === 'area').length + 1}`,
+                    points: [...state.interaction.areaPoints]
+                };
+                state.elements.push(areaEl);
+                state.interaction.areaPoints = [];
+                saveHistory();
+                showToast(`Superficie calculada: ${calculatePolygonArea(areaEl.points).toFixed(2)} m²`);
+                render();
+            }
+        });
+
+        // Desactivar menú contextual del clic derecho
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Zoom con rueda del ratón hacia el cursor
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const screenPt = getCanvasCoords(e);
+            const worldBefore = screenToWorld(screenPt.x, screenPt.y);
+
+            const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
+            state.camera.zoom = Math.max(0.2, Math.min(8.0, state.camera.zoom * zoomFactor));
+
+            const worldAfter = screenToWorld(screenPt.x, screenPt.y);
+            state.camera.x += (worldAfter.x - worldBefore.x) * PIXELS_PER_METER * state.camera.zoom;
+            state.camera.y += (worldAfter.y - worldBefore.y) * PIXELS_PER_METER * state.camera.zoom;
+
+            document.getElementById('zoomDisplay').textContent = Math.round(state.camera.zoom * 100) + '%';
+            render();
+        }, { passive: false });
+
+        // Atajos de teclado
+        window.addEventListener('keydown', (e) => {
+            // Ignorar atajos si el usuario está escribiendo en un input
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                if (e.key === 'Enter' && document.activeElement.id === 'exactLengthInput') {
+                    applyExactWallLength();
+                }
+                return;
+            }
+
+            if (e.code === 'Space') {
+                state.interaction.spacePressed = true;
+                canvas.style.cursor = 'grab';
+            }
+            if (e.key === 'Shift') state.interaction.shiftPressed = true;
+
+            if (e.key === 'Escape') {
+                state.interaction.isDrawing = false;
+                state.interaction.drawStart = null;
+                state.interaction.areaPoints = [];
+                state.selectedId = null;
+                document.getElementById('exactWallBar').classList.add('hidden');
+                renderPropertiesPanel();
+                render();
+            }
+
+            if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedId) {
+                deleteSelectedElement();
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                undo();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                redo();
+            }
+
+            // Atajos de herramientas
+            const keyMap = { v: 'select', w: 'wall', d: 'door', n: 'window', a: 'area', m: 'dimension', t: 'text' };
+            if (!e.ctrlKey && !e.metaKey && keyMap[e.key.toLowerCase()]) {
+                setActiveTool(keyMap[e.key.toLowerCase()]);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                state.interaction.spacePressed = false;
+                canvas.style.cursor = state.activeTool === 'select' ? 'default' : 'crosshair';
+            }
+            if (e.key === 'Shift') state.interaction.shiftPressed = false;
+        });
+
+        // Aplicar medida exacta de muro escrita en la barra superior
+        function applyExactWallLength() {
+            const val = parseFloat(document.getElementById('exactLengthInput').value);
+            if (!val || val <= 0 || !state.interaction.isDrawing || !state.interaction.drawStart) return;
+
+            const start = state.interaction.drawStart;
+            const mouse = applyOrtho(start, state.interaction.currentMouseWorld);
+            let angle = Math.atan2(mouse.y - start.y, mouse.x - start.x);
+            if (dist(start, mouse) < 0.01) angle = 0; // Por defecto hacia la derecha
+
+            const endPt = {
+                x: Number((start.x + Math.cos(angle) * val).toFixed(3)),
+                y: Number((start.y + Math.sin(angle) * val).toFixed(3))
+            };
+
+            state.elements.push({
+                id: uid(),
+                type: 'wall',
+                start: { ...start },
+                end: endPt,
+                thickness: state.defaults.wallThickness
+            });
+            saveHistory();
+
+            // Encadenar siguiente muro
+            state.interaction.drawStart = { ...endPt };
+            document.getElementById('exactLengthInput').value = '';
+            document.getElementById('exactLengthInput').focus();
+            render();
+        }
+        document.getElementById('btnApplyExactWall').addEventListener('click', applyExactWallLength);
+
+        // =========================================================================
+        // 6. CAMBIO DE HERRAMIENTAS Y PANEL DE PROPIEDADES DINÁMICO
+        // =========================================================================
+        const toolHints = {
+            select: 'Haz clic en un objeto para seleccionarlo, moverlo o editar sus propiedades.',
+            wall: 'Haz clic para iniciar un muro, mueve el cursor y vuelve a hacer clic. Usa Esc para soltar.',
+            door: 'Haz clic donde deseas colocar la puerta. Luego puedes rotarla o invertir su apertura.',
+            window: 'Haz clic sobre un muro para colocar la ventana.',
+            area: 'Haz clic en cada esquina de la habitación. Haz doble clic o cierra en el punto naranja para calcular m².',
+            dimension: 'Haz clic en el punto inicial y luego en el punto final para acotar la distancia.',
+            text: 'Haz clic en el plano para colocar una etiqueta de ambiente.',
+            panel_elec: 'Haz clic para ubicar el Tablero Eléctrico (TE).',
+            extinguisher: 'Haz clic para ubicar el Extintor.',
+            emerg_light: 'Haz clic para ubicar la Luz de Emergencia (LE).',
+            smoke_det: 'Haz clic para ubicar el Detector de Humo (S).'
+        };
+
+        function setActiveTool(toolName) {
+            state.activeTool = toolName;
+            state.interaction.isDrawing = false;
+            state.interaction.drawStart = null;
+            state.interaction.areaPoints = [];
+            document.getElementById('exactWallBar').classList.add('hidden');
+
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tool === toolName);
+            });
+
+            document.getElementById('toolHintText').textContent = toolHints[toolName] || '';
+            canvas.style.cursor = toolName === 'select' ? 'default' : 'crosshair';
+
+            if (toolName !== 'select') {
+                state.selectedId = null;
+            }
+            renderPropertiesPanel();
+            render();
+        }
+
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => setActiveTool(btn.dataset.tool));
+        });
+
+        function deleteSelectedElement() {
+            if (!state.selectedId) return;
+            state.elements = state.elements.filter(x => x.id !== state.selectedId);
+            state.selectedId = null;
+            saveHistory();
+            renderPropertiesPanel();
+            render();
+        }
+
+        // Renderizar controles del panel derecho según selección o herramienta activa
+        function renderPropertiesPanel() {
+            const panel = document.getElementById('propertiesContainer');
+            const badge = document.getElementById('selectionBadge');
+            const el = state.elements.find(x => x.id === state.selectedId);
+
+            if (el) {
+                const names = {
+                    wall: 'Muro / Pared', door: 'Puerta', window: 'Ventana',
+                    dimension: 'Cota', text: 'Etiqueta de Texto', area: 'Superficie m²',
+                    panel_elec: 'Tablero Eléctrico', extinguisher: 'Extintor',
+                    emerg_light: 'Luz de Emergencia', smoke_det: 'Detector de Humo'
+                };
+                badge.textContent = names[el.type] || 'Objeto';
+                badge.className = 'text-[10px] bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full';
+
+                let html = '';
+
+                if (el.type === 'wall') {
+                    const currentLen = dist(el.start, el.end).toFixed(2);
+                    html += `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Longitud del muro (m)</label>
+                            <div class="flex gap-1.5">
+                                <input id="propWallLen" type="number" step="0.05" value="${currentLen}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech">
+                                <button id="btnUpdateWallLen" class="bg-blue-600 hover:bg-blue-500 text-white px-2.5 rounded">OK</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-slate-400 block mb-1">Grosor de muro</label>
+                            <select id="propWallThick" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white">
+                                <option value="0.10" ${el.thickness === 0.10 ? 'selected' : ''}>0.10 m (Tabique ligero)</option>
+                                <option value="0.15" ${el.thickness === 0.15 ? 'selected' : ''}>0.15 m (Pared interior)</option>
+                                <option value="0.20" ${el.thickness === 0.20 ? 'selected' : ''}>0.20 m (Muro estándar)</option>
+                                <option value="0.30" ${el.thickness === 0.30 ? 'selected' : ''}>0.30 m (Muro exterior/portante)</option>
+                            </select>
+                        </div>
+                    `;
+                } else if (el.type === 'door' || el.type === 'window') {
+                    html += `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Ancho (m)</label>
+                            <input id="propOpeningWidth" type="number" step="0.05" min="0.4" max="4" value="${el.width}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech">
+                        </div>
+                        <div>
+                            <label class="text-slate-400 block mb-1">Rotación (grados)</label>
+                            <div class="flex gap-1.5">
+                                <input id="propRotation" type="number" step="15" value="${el.rotation || 0}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech">
+                                <button id="btnRotate90" class="bg-slate-800 hover:bg-slate-700 px-2.5 rounded text-slate-200 border border-slate-700">+90°</button>
+                            </div>
+                        </div>
+                    `;
+                    if (el.type === 'door') {
+                        html += `
+                            <button id="btnFlipDoor" class="w-full py-1.5 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-slate-200">
+                                Invertir lado de apertura
+                            </button>
+                        `;
+                    }
+                } else if (el.type === 'text') {
+                    html += `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Texto de etiqueta</label>
+                            <input id="propTextVal" type="text" value="${el.text}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white">
+                        </div>
+                        <div>
+                            <label class="text-slate-400 block mb-1">Tamaño de letra (m)</label>
+                            <input id="propTextSize" type="number" step="0.05" min="0.15" max="1.5" value="${el.size || 0.35}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech">
+                        </div>
+                    `;
+                } else if (el.type === 'area') {
+                    html += `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Nombre del ambiente</label>
+                            <input id="propAreaName" type="text" value="${el.name}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white">
+                        </div>
+                        <div class="p-2 bg-emerald-950/50 border border-emerald-800/60 rounded text-emerald-300 font-mono-tech">
+                            Superficie: <strong>${calculatePolygonArea(el.points).toFixed(2)} m²</strong>
+                        </div>
+                    `;
+                } else if (['panel_elec', 'extinguisher', 'emerg_light', 'smoke_det'].includes(el.type)) {
+                    html += `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Rotación (grados)</label>
+                            <div class="flex gap-1.5">
+                                <input id="propRotation" type="number" step="15" value="${el.rotation || 0}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech">
+                                <button id="btnRotate90" class="bg-slate-800 hover:bg-slate-700 px-2.5 rounded text-slate-200 border border-slate-700">+90°</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-slate-400 block mb-1">Escala del símbolo</label>
+                            <input id="propSymScale" type="number" step="0.1" min="0.5" max="2.5" value="${el.scale || 1.0}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech">
+                        </div>
+                    `;
+                }
+
+                html += `
+                    <button id="btnDeleteSelected" class="w-full mt-2 py-1.5 bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-900/70 rounded-lg font-medium transition">
+                        Eliminar Elemento (Supr)
+                    </button>
+                `;
+
+                panel.innerHTML = html;
+
+                // Enlazar eventos de edición del elemento seleccionado
+                if (document.getElementById('btnDeleteSelected')) {
+                    document.getElementById('btnDeleteSelected').onclick = deleteSelectedElement;
+                }
+                if (document.getElementById('btnUpdateWallLen')) {
+                    document.getElementById('btnUpdateWallLen').onclick = () => {
+                        const newLen = parseFloat(document.getElementById('propWallLen').value);
+                        if (newLen > 0.05) {
+                            const angle = Math.atan2(el.end.y - el.start.y, el.end.x - el.start.x);
+                            el.end.x = Number((el.start.x + Math.cos(angle) * newLen).toFixed(3));
+                            el.end.y = Number((el.start.y + Math.sin(angle) * newLen).toFixed(3));
+                            saveHistory();
+                            render();
+                        }
+                    };
+                }
+                if (document.getElementById('propWallThick')) {
+                    document.getElementById('propWallThick').onchange = (e) => {
+                        el.thickness = parseFloat(e.target.value);
+                        saveHistory();
+                        render();
+                    };
+                }
+                if (document.getElementById('propOpeningWidth')) {
+                    document.getElementById('propOpeningWidth').onchange = (e) => {
+                        el.width = parseFloat(e.target.value) || 0.8;
+                        saveHistory();
+                        render();
+                    };
+                }
+                if (document.getElementById('propRotation')) {
+                    document.getElementById('propRotation').onchange = (e) => {
+                        el.rotation = parseFloat(e.target.value) || 0;
+                        saveHistory();
+                        render();
+                    };
+                }
+                if (document.getElementById('btnRotate90')) {
+                    document.getElementById('btnRotate90').onclick = () => {
+                        el.rotation = ((el.rotation || 0) + 90) % 360;
+                        saveHistory();
+                        renderPropertiesPanel();
+                        render();
+                    };
+                }
+                if (document.getElementById('btnFlipDoor')) {
+                    document.getElementById('btnFlipDoor').onclick = () => {
+                        el.flip = !el.flip;
+                        saveHistory();
+                        render();
+                    };
+                }
+                if (document.getElementById('propTextVal')) {
+                    document.getElementById('propTextVal').oninput = (e) => {
+                        el.text = e.target.value;
+                        render();
+                    };
+                    document.getElementById('propTextVal').onchange = () => saveHistory();
+                }
+                if (document.getElementById('propTextSize')) {
+                    document.getElementById('propTextSize').onchange = (e) => {
+                        el.size = parseFloat(e.target.value) || 0.35;
+                        saveHistory();
+                        render();
+                    };
+                }
+                if (document.getElementById('propAreaName')) {
+                    document.getElementById('propAreaName').oninput = (e) => {
+                        el.name = e.target.value;
+                        updateAreaSummary();
+                        render();
+                    };
+                    document.getElementById('propAreaName').onchange = () => saveHistory();
+                }
+                if (document.getElementById('propSymScale')) {
+                    document.getElementById('propSymScale').onchange = (e) => {
+                        el.scale = parseFloat(e.target.value) || 1.0;
+                        saveHistory();
+                        render();
+                    };
+                }
+            } else {
+                // Sin elemento seleccionado: Mostrar opciones de la herramienta activa
+                badge.textContent = 'Herramienta';
+                badge.className = 'text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full';
+
+                const t = state.activeTool;
+                if (t === 'wall') {
+                    panel.innerHTML = `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Grosor de muro por defecto</label>
+                            <select id="defWallThick" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white">
+                                <option value="0.10" ${state.defaults.wallThickness === 0.10 ? 'selected' : ''}>0.10 m (Tabique)</option>
+                                <option value="0.15" ${state.defaults.wallThickness === 0.15 ? 'selected' : ''}>0.15 m (Interior)</option>
+                                <option value="0.20" ${state.defaults.wallThickness === 0.20 ? 'selected' : ''}>0.20 m (Estándar)</option>
+                                <option value="0.30" ${state.defaults.wallThickness === 0.30 ? 'selected' : ''}>0.30 m (Exterior)</option>
+                            </select>
+                        </div>
+                    `;
+                    document.getElementById('defWallThick').onchange = (e) => state.defaults.wallThickness = parseFloat(e.target.value);
+                } else if (t === 'door') {
+                    panel.innerHTML = `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Ancho de puerta (m)</label>
+                            <select id="defDoorWidth" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white">
+                                <option value="0.70" ${state.defaults.doorWidth === 0.70 ? 'selected' : ''}>0.70 m (Baño)</option>
+                                <option value="0.80" ${state.defaults.doorWidth === 0.80 ? 'selected' : ''}>0.80 m (Dormitorio)</option>
+                                <option value="0.85" ${state.defaults.doorWidth === 0.85 ? 'selected' : ''}>0.85 m (Estándar)</option>
+                                <option value="0.90" ${state.defaults.doorWidth === 0.90 ? 'selected' : ''}>0.90 m (Principal)</option>
+                                <option value="1.20" ${state.defaults.doorWidth === 1.20 ? 'selected' : ''}>1.20 m (Doble hoja)</option>
+                            </select>
+                        </div>
+                    `;
+                    document.getElementById('defDoorWidth').onchange = (e) => state.defaults.doorWidth = parseFloat(e.target.value);
+                } else if (t === 'window') {
+                    panel.innerHTML = `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Ancho de ventana (m)</label>
+                            <input id="defWinWidth" type="number" step="0.10" value="${state.defaults.windowWidth}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono-tech">
+                        </div>
+                    `;
+                    document.getElementById('defWinWidth').onchange = (e) => state.defaults.windowWidth = parseFloat(e.target.value) || 1.2;
+                } else if (t === 'text') {
+                    panel.innerHTML = `
+                        <div>
+                            <label class="text-slate-400 block mb-1">Etiquetas rápidas</label>
+                            <div class="flex flex-wrap gap-1 mb-2">
+                                ${['Estar / Living', 'Comedor', 'Cocina', 'Dormitorio', 'Baño', 'Garaje', 'Patio'].map(lbl => 
+                                    `<button type="button" class="quick-lbl px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-[11px] text-slate-200">${lbl}</button>`
+                                ).join('')}
+                            </div>
+                            <input id="defTextInput" type="text" value="${state.defaults.textLabel}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white">
+                        </div>
+                    `;
+                    document.getElementById('defTextInput').oninput = (e) => state.defaults.textLabel = e.target.value;
+                    panel.querySelectorAll('.quick-lbl').forEach(b => {
+                        b.onclick = () => {
+                            state.defaults.textLabel = b.textContent;
+                            document.getElementById('defTextInput').value = b.textContent;
+                        };
+                    });
+                } else {
+                    panel.innerHTML = `<p class="text-slate-500">Haz clic sobre cualquier elemento del plano para editar sus medidas, rotación o eliminarlo.</p>`;
+                }
+            }
+        }
+
+        // Actualizar cuadro lateral de superficies (m²)
+        function updateAreaSummary() {
+            const list = document.getElementById('areaListContainer');
+            const totalBadge = document.getElementById('totalAreaBadge');
+            const areas = state.elements.filter(el => el.type === 'area');
+
+            let total = 0;
+            if (areas.length === 0) {
+                list.innerHTML = `<div class="text-[11px] text-slate-600 italic py-1">Aún no hay habitaciones medidas.</div>`;
+                totalBadge.textContent = 'Total: 0.00 m²';
+                return;
+            }
+
+            list.innerHTML = areas.map(a => {
+                const m2 = calculatePolygonArea(a.points);
+                total += m2;
+                return `
+                    <div class="flex items-center justify-between bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-lg text-xs">
+                        <span class="text-slate-200 truncate pr-2">${a.name}</span>
+                        <span class="font-mono-tech text-emerald-400 font-semibold shrink-0">${m2.toFixed(2)} m²</span>
+                    </div>
+                `;
+            }).join('');
+
+            totalBadge.textContent = `Total: ${total.toFixed(2)} m²`;
+        }
+
+        // =========================================================================
+        // 7. GESTIÓN DE BOCETO DE FONDO (CALCO)
+        // =========================================================================
+        document.getElementById('bgImageInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    state.bgImage.img = img;
+                    state.bgImage.dataUrl = ev.target.result;
+                    // Ajustar escala inicial razonable (ej. ~12 metros de ancho)
+                    state.bgImage.scale = (12 * PIXELS_PER_METER) / img.width;
+                    document.getElementById('bgScaleSlider').value = Math.round(state.bgImage.scale * 100);
+                    document.getElementById('bgScaleVal').textContent = state.bgImage.scale.toFixed(2) + 'x';
+
+                    document.getElementById('bgEmptyState').classList.add('hidden');
+                    document.getElementById('bgControls').classList.remove('hidden');
+                    document.getElementById('btnRemoveBg').classList.remove('hidden');
+                    showToast('Boceto cargado. Ajusta su opacidad y escala para calcar.');
+                    render();
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+        });
+
+        document.getElementById('bgOpacitySlider').addEventListener('input', (e) => {
+            state.bgImage.opacity = e.target.value / 100;
+            document.getElementById('bgOpacityVal').textContent = e.target.value + '%';
+            render();
+        });
+
+        document.getElementById('bgScaleSlider').addEventListener('input', (e) => {
+            state.bgImage.scale = e.target.value / 100;
+            document.getElementById('bgScaleVal').textContent = state.bgImage.scale.toFixed(2) + 'x';
+            render();
+        });
+
+        document.getElementById('bgPosX').addEventListener('input', (e) => {
+            state.bgImage.x = parseFloat(e.target.value) || 0;
+            render();
+        });
+
+        document.getElementById('bgPosY').addEventListener('input', (e) => {
+            state.bgImage.y = parseFloat(e.target.value) || 0;
+            render();
+        });
+
+        document.getElementById('btnRemoveBg').addEventListener('click', () => {
+            state.bgImage.img = null;
+            state.bgImage.dataUrl = null;
+            document.getElementById('bgEmptyState').classList.remove('hidden');
+            document.getElementById('bgControls').classList.add('hidden');
+            document.getElementById('btnRemoveBg').classList.add('hidden');
+            render();
+        });
+
+        // =========================================================================
+        // 8. GUARDAR / CARGAR JSON Y EXPORTAR LÁMINA PNG PROFESIONAL
+        // =========================================================================
+        document.getElementById('btnSaveJson').addEventListener('click', () => {
+            const data = {
+                app: 'ArchiSketch 2D CAD',
+                version: '1.0',
+                title: document.getElementById('projectTitleInput').value,
+                date: new Date().toISOString(),
+                elements: state.elements
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${data.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Proyecto guardado en formato JSON.');
+        });
+
+        document.getElementById('loadJsonInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const parsed = JSON.parse(ev.target.result);
+                    if (Array.isArray(parsed.elements)) {
+                        state.elements = parsed.elements;
+                        if (parsed.title) document.getElementById('projectTitleInput').value = parsed.title;
+                        state.selectedId = null;
+                        saveHistory();
+                        renderPropertiesPanel();
+                        render();
+                        showToast('Plano cargado correctamente.');
+                    }
+                } catch (err) {
+                    showToast('Error: El archivo JSON no es válido.');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        });
+
+        // Modal de exportación PNG
+        document.getElementById('btnExportModal').addEventListener('click', () => {
+            document.getElementById('exportModal').classList.remove('hidden');
+        });
+        document.getElementById('btnCancelExport').addEventListener('click', () => {
+            document.getElementById('exportModal').classList.add('hidden');
+        });
+
+        document.getElementById('btnConfirmExport').addEventListener('click', () => {
+            document.getElementById('exportModal').classList.add('hidden');
+            exportToPNG();
+        });
+
+        function exportToPNG() {
+            const theme = document.getElementById('exportThemeSelect').value;
+            const showGrid = document.getElementById('exportIncludeGrid').checked;
+            const includeTitleBlock = document.getElementById('exportIncludeTitleBlock').checked;
+            const includeLegend = document.getElementById('exportIncludeLegend').checked;
+
+            // Calcular límites (Bounding Box) del proyecto en metros
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            if (state.elements.length === 0) {
+                minX = -5; minY = -4; maxX = 5; maxY = 4;
+            } else {
+                state.elements.forEach(el => {
+                    if (el.start && el.end) {
+                        minX = Math.min(minX, el.start.x, el.end.x);
+                        maxX = Math.max(maxX, el.start.x, el.end.x);
+                        minY = Math.min(minY, el.start.y, el.end.y);
+                        maxY = Math.max(maxY, el.start.y, el.end.y);
+                    } else if (el.points) {
+                        el.points.forEach(p => {
+                            minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+                            minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+                        });
+                    } else if (el.x !== undefined) {
+                        minX = Math.min(minX, el.x - 1); maxX = Math.max(maxX, el.x + 1);
+                        minY = Math.min(minY, el.y - 1); maxY = Math.max(maxY, el.y + 1);
+                    }
+                });
+            }
+
+            // Margen de 1.5m alrededor del plano
+            minX -= 1.5; minY -= 1.5; maxX += 1.5; maxY += 1.5;
+
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = 1920;
+            exportCanvas.height = 1280;
+            const eCtx = exportCanvas.getContext('2d');
+
+            const drawingAreaW = includeTitleBlock ? 1480 : 1840;
+            const drawingAreaH = 1200;
+
+            const worldW = Math.max(1, maxX - minX);
+            const worldH = Math.max(1, maxY - minY);
+            const scale = Math.min(drawingAreaW / worldW, drawingAreaH / worldH);
+
+            const offsetX = 40 + (drawingAreaW - worldW * scale) / 2 - minX * scale;
+            const offsetY = 40 + (drawingAreaH - worldH * scale) / 2 - minY * scale;
+
+            render(eCtx, {
+                isExport: true,
+                theme,
+                showGrid,
+                scale,
+                offsetX,
+                offsetY,
+                bounds: { minX, maxX, minY, maxY }
+            });
+
+            const isDark = theme === 'blueprint_dark';
+            const borderColor = isDark ? '#475569' : '#0f172a';
+            const panelBg = isDark ? '#0f172a' : '#ffffff';
+            const textColor = isDark ? '#f8fafc' : '#0f172a';
+
+            // Marco exterior de lámina arquitectónica
+            eCtx.strokeStyle = borderColor;
+            eCtx.lineWidth = 4;
+            eCtx.strokeRect(30, 30, 1860, 1220);
+
+            // Cajetín técnico derecho (Rótulo, Superficies y Leyenda)
+            if (includeTitleBlock) {
+                const bx = 1510, bw = 380;
+                eCtx.fillStyle = panelBg;
+                eCtx.fillRect(bx, 30, bw, 1220);
+                eCtx.strokeRect(bx, 30, bw, 1220);
+
+                // Título del proyecto
+                eCtx.fillStyle = textColor;
+                eCtx.font = 'bold 22px "Inter", sans-serif';
+                eCtx.fillText('PROYECTO:', bx + 20, 75);
+                eCtx.font = '600 20px "Inter", sans-serif';
+                const title = document.getElementById('projectTitleInput').value;
+                eCtx.fillText(title.substring(0, 28), bx + 20, 108);
+
+                eCtx.font = '15px "JetBrains Mono", monospace';
+                eCtx.fillText(`Fecha: ${new Date().toLocaleDateString()}`, bx + 20, 142);
+                eCtx.fillText('Unidad: Metros (m)', bx + 20, 166);
+
+                eCtx.beginPath();
+                eCtx.moveTo(bx, 190); eCtx.lineTo(bx + bw, 190);
+                eCtx.stroke();
+
+                // Cuadro de superficies
+                eCtx.font = 'bold 18px "Inter", sans-serif';
+                eCtx.fillText('CUADRO DE SUPERFICIES', bx + 20, 225);
+
+                let cy = 260;
+                let totalM2 = 0;
+                const areas = state.elements.filter(x => x.type === 'area');
+                eCtx.font = '16px "JetBrains Mono", monospace';
+                areas.forEach(a => {
+                    const m2 = calculatePolygonArea(a.points);
+                    totalM2 += m2;
+                    eCtx.fillText(`${a.name.substring(0, 18)}:`, bx + 20, cy);
+                    eCtx.fillText(`${m2.toFixed(2)} m²`, bx + 260, cy);
+                    cy += 28;
+                });
+
+                eCtx.font = 'bold 18px "JetBrains Mono", monospace';
+                eCtx.fillText(`TOTAL: ${totalM2.toFixed(2)} m²`, bx + 20, cy + 15);
+
+                // Leyenda de simbología de seguridad
+                if (includeLegend) {
+                    const ly = 720;
+                    eCtx.beginPath();
+                    eCtx.moveTo(bx, ly); eCtx.lineTo(bx + bw, ly);
+                    eCtx.stroke();
+
+                    eCtx.font = 'bold 18px "Inter", sans-serif';
+                    eCtx.fillText('SIMBOLOGÍA DE SEGURIDAD', bx + 20, ly + 35);
+
+                    const legends = [
+                        { label: 'TE - Tablero Eléctrico', color: '#eab308' },
+                        { label: 'EXT - Extintor Portátil', color: '#ef4444' },
+                        { label: 'LE - Luz de Emergencia', color: '#10b981' },
+                        { label: 'S - Detector de Humo', color: '#f97316' }
+                    ];
+
+                    legends.forEach((item, idx) => {
+                        const yPos = ly + 80 + idx * 42;
+                        eCtx.fillStyle = item.color;
+                        eCtx.fillRect(bx + 25, yPos - 14, 18, 18);
+                        eCtx.fillStyle = textColor;
+                        eCtx.font = '16px "Inter", sans-serif';
+                        eCtx.fillText(item.label, bx + 55, yPos);
+                    });
+                }
+            }
+
+            // Descargar imagen
+            const link = document.createElement('a');
+            link.download = `plano_${Date.now()}.png`;
+            link.href = exportCanvas.toDataURL('image/png');
+            link.click();
+            showToast('Lámina PNG exportada con éxito.');
+        }
+
+        // =========================================================================
+        // 9. CONTROLES DE BARRA SUPERIOR Y PLANO DE EJEMPLO
+        // =========================================================================
+        document.getElementById('btnUndo').addEventListener('click', undo);
+        document.getElementById('btnRedo').addEventListener('click', redo);
+
+        document.getElementById('chkSnap').addEventListener('change', (e) => {
+            state.snapEnabled = e.target.checked;
+        });
+
+        document.getElementById('snapSizeSelect').addEventListener('change', (e) => {
+            state.snapSize = parseFloat(e.target.value);
+        });
+
+        document.getElementById('btnResetView').addEventListener('click', () => {
+            state.camera.x = 0;
+            state.camera.y = 0;
+            state.camera.zoom = 1.0;
+            document.getElementById('zoomDisplay').textContent = '100%';
+            render();
+        });
+
+        document.getElementById('btnClearCanvas').addEventListener('click', () => {
+            showConfirm('Limpiar lienzo', '¿Deseas borrar todos los muros y elementos del plano actual?', () => {
+                state.elements = [];
+                state.selectedId = null;
+                saveHistory();
+                renderPropertiesPanel();
+                render();
+                showToast('Lienzo limpio.');
+            });
+        });
+
+        // Cargar un plano arquitectónico de vivienda de muestra
+        function loadSamplePlan() {
+            state.elements = [
+                // Áreas / Habitaciones
+                { id: uid(), type: 'area', name: 'Estar - Comedor', points: [{x:-5,y:-4},{x:1,y:-4},{x:1,y:3},{x:-5,y:3}] },
+                { id: uid(), type: 'area', name: 'Cocina', points: [{x:1,y:-4},{x:5,y:-4},{x:5,y:-0.5},{x:1,y:-0.5}] },
+                { id: uid(), type: 'area', name: 'Dormitorio', points: [{x:1,y:-0.5},{x:5,y:-0.5},{x:5,y:3},{x:1,y:3}] },
+                // Muros exteriores
+                { id: uid(), type: 'wall', start: {x:-5,y:-4}, end: {x:5,y:-4}, thickness: 0.25 },
+                { id: uid(), type: 'wall', start: {x:5,y:-4}, end: {x:5,y:3}, thickness: 0.25 },
+                { id: uid(), type: 'wall', start: {x:5,y:3}, end: {x:-5,y:3}, thickness: 0.25 },
+                { id: uid(), type: 'wall', start: {x:-5,y:3}, end: {x:-5,y:-4}, thickness: 0.25 },
+                // Muros interiores
+                { id: uid(), type: 'wall', start: {x:1,y:-4}, end: {x:1,y:3}, thickness: 0.15 },
+                { id: uid(), type: 'wall', start: {x:1,y:-0.5}, end: {x:5,y:-0.5}, thickness: 0.15 },
+                // Puertas
+                { id: uid(), type: 'door', x: -3.5, y: 3, width: 0.90, rotation: 0, flip: false },
+                { id: uid(), type: 'door', x: 1, y: -2.2, width: 0.85, rotation: 90, flip: false },
+                { id: uid(), type: 'door', x: 1, y: 1.2, width: 0.85, rotation: 90, flip: true },
+                // Ventanas
+                { id: uid(), type: 'window', x: -2, y: -4, width: 1.80, rotation: 0 },
+                { id: uid(), type: 'window', x: 3, y: -4, width: 1.20, rotation: 0 },
+                { id: uid(), type: 'window', x: 5, y: 1.2, width: 1.40, rotation: 90 },
+                // Señalización de seguridad
+                { id: uid(), type: 'panel_elec', x: -4.6, y: 2.6, rotation: 0, scale: 1.0 },
+                { id: uid(), type: 'extinguisher', x: 0.6, y: -3.5, rotation: 0, scale: 1.0 },
+                { id: uid(), type: 'emerg_light', x: -3.5, y: 2.6, rotation: 0, scale: 1.0 },
+                { id: uid(), type: 'smoke_det', x: 3.0, y: -2.2, rotation: 0, scale: 1.0 },
+                // Cotas generales
+                { id: uid(), type: 'dimension', start: {x:-5,y:-4.6}, end: {x:5,y:-4.6} },
+                { id: uid(), type: 'dimension', start: {x:-5.6,y:-4}, end: {x:-5.6,y:3} }
+            ];
+            state.selectedId = null;
+            saveHistory();
+            renderPropertiesPanel();
+            render();
+        }
+
+        document.getElementById('btnLoadDemo').addEventListener('click', () => {
+            showConfirm('Cargar plano de ejemplo', 'Se reemplazará el plano actual con una vivienda de ejemplo.', () => {
+                loadSamplePlan();
+                showToast('Plano de ejemplo cargado.');
+            });
+        });
+
+        // =========================================================================
+        // INICIALIZACIÓN
+        // =========================================================================
+        window.onload = () => {
+            resizeCanvas();
+            // Intentar recuperar autoguardado previo o cargar ejemplo inicial
+            const saved = localStorage.getItem('archisketch_autosave');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.elements && parsed.elements.length > 0) {
+                        state.elements = parsed.elements;
+                        if (parsed.title) document.getElementById('projectTitleInput').value = parsed.title;
+                        saveHistory();
+                        renderPropertiesPanel();
+                        render();
+                        return;
+                    }
+                } catch (e) {}
+            }
+            loadSamplePlan();
+        };
+    </script>
+</body>
+</html>
